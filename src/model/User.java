@@ -38,11 +38,13 @@ public class User implements Serializable {
     @Column(nullable = false)
     private boolean active;
     
-    @Column(name = "last_login")
-    private LocalDateTime lastLogin;
+    @Column(name = "last_login", columnDefinition = "TIMESTAMP")
+    @Temporal(TemporalType.TIMESTAMP)
+    private java.util.Date lastLogin;
     
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "created_at", nullable = false, columnDefinition = "TIMESTAMP")
+    @Temporal(TemporalType.TIMESTAMP)
+    private java.util.Date createdAt;
     
     // Role constants
     public static final String ROLE_ADMIN = "ADMIN";
@@ -54,7 +56,7 @@ public class User implements Serializable {
      */
     public User() {
         this.active = true;
-        this.createdAt = LocalDateTime.now();
+        this.createdAt = new java.util.Date();
     }
     
     /**
@@ -91,7 +93,7 @@ public class User implements Serializable {
      */
     public User(int id, String username, String password, String salt, 
                 String fullName, String email, String role, boolean active,
-                LocalDateTime lastLogin, LocalDateTime createdAt) {
+                java.util.Date lastLogin, java.util.Date createdAt) {
         this.id = id;
         this.username = username;
         this.password = password;
@@ -170,19 +172,19 @@ public class User implements Serializable {
         this.active = active;
     }
 
-    public LocalDateTime getLastLogin() {
+    public java.util.Date getLastLogin() {
         return lastLogin;
     }
 
-    public void setLastLogin(LocalDateTime lastLogin) {
+    public void setLastLogin(java.util.Date lastLogin) {
         this.lastLogin = lastLogin;
     }
 
-    public LocalDateTime getCreatedAt() {
+    public java.util.Date getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
+    public void setCreatedAt(java.util.Date createdAt) {
         this.createdAt = createdAt;
     }
     
@@ -208,7 +210,7 @@ public class User implements Serializable {
      * Updates the last login time to the current time
      */
     public void updateLastLogin() {
-        this.lastLogin = LocalDateTime.now();
+        this.lastLogin = new java.util.Date();
     }
     
     @Override

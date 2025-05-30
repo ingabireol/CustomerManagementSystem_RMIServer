@@ -8,7 +8,7 @@ import util.HibernateUtil;
 import util.LogUtil;
 import util.SecurityUtil;
 
-import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -25,7 +25,7 @@ public class UserDao {
      */
     public User createUser(User user) {
         Transaction transaction = null;
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             transaction = session.beginTransaction();
             
@@ -35,6 +35,11 @@ public class UserDao {
                 String hashedPassword = SecurityUtil.hashPasswordString(user.getPassword(), salt);
                 user.setSalt(salt);
                 user.setPassword(hashedPassword);
+            }
+            
+            // Ensure dates are set
+            if (user.getCreatedAt() == null) {
+                user.setCreatedAt(new Date());
             }
             
             session.save(user);
@@ -58,7 +63,7 @@ public class UserDao {
      */
     public User updateUser(User user) {
         Transaction transaction = null;
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             transaction = session.beginTransaction();
             session.update(user);
@@ -83,7 +88,7 @@ public class UserDao {
      */
     public int updatePassword(int userId, String newPassword) {
         Transaction transaction = null;
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             transaction = session.beginTransaction();
             
@@ -118,12 +123,12 @@ public class UserDao {
      */
     public int updateLastLogin(int userId) {
         Transaction transaction = null;
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             transaction = session.beginTransaction();
             Query query = session.createQuery(
                 "UPDATE User u SET u.lastLogin = :lastLogin WHERE u.id = :id");
-            query.setParameter("lastLogin", LocalDateTime.now());
+            query.setParameter("lastLogin", new Date());
             query.setParameter("id", userId);
             int rowsAffected = query.executeUpdate();
             transaction.commit();
@@ -144,7 +149,7 @@ public class UserDao {
      * @return The user if found, null otherwise
      */
     public User findUserById(int id) {
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             User user = (User) session.get(User.class, id);
             if (user != null) {
@@ -166,7 +171,7 @@ public class UserDao {
      * @return The user if found, null otherwise
      */
     public User findUserByUsername(String username) {
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "FROM User u WHERE u.username = :username");
@@ -192,7 +197,7 @@ public class UserDao {
      * @return The user if found, null otherwise
      */
     public User findUserByEmail(String email) {
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "FROM User u WHERE u.email = :email");
@@ -217,7 +222,7 @@ public class UserDao {
      * @return List of all users
      */
     public List<User> findAllUsers() {
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery("FROM User ORDER BY username");
             List<User> users = query.list();
@@ -236,7 +241,7 @@ public class UserDao {
      * @return List of matching users
      */
     public List<User> findUsersByRole(String role) {
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "FROM User u WHERE u.role = :role ORDER BY u.username");
@@ -298,7 +303,7 @@ public class UserDao {
      */
     public User deleteUser(User user) {
         Transaction transaction = null;
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             transaction = session.beginTransaction();
             session.delete(user);
@@ -321,7 +326,7 @@ public class UserDao {
      * @return true if exists, false otherwise
      */
     public boolean usernameExists(String username) {
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "SELECT COUNT(u) FROM User u WHERE u.username = :username");
@@ -341,7 +346,7 @@ public class UserDao {
      * @return true if exists, false otherwise
      */
     public boolean emailExists(String email) {
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "SELECT COUNT(u) FROM User u WHERE u.email = :email");
@@ -361,9 +366,12 @@ public class UserDao {
      */
     public User createDefaultAdmin() {
         try {
-            // Check if there are any users
-            List<User> users = findAllUsers();
-            if (users != null && !users.isEmpty()) {
+            // Check if there are any users by using a simple count query instead
+            Session session = HibernateUtil.getSessionFactory().openSession();
+            Query countQuery = session.createQuery("SELECT COUNT(u) FROM User u");
+            Long userCount = (Long) countQuery.uniqueResult();
+            
+            if (userCount != null && userCount > 0) {
                 LogUtil.debug("Users already exist, skipping default admin creation");
                 return null;
             }
@@ -376,6 +384,7 @@ public class UserDao {
             admin.setEmail("admin@example.com");
             admin.setRole(User.ROLE_ADMIN);
             admin.setActive(true);
+            admin.setCreatedAt(new Date());
             
             User result = createUser(admin);
             if (result != null) {
