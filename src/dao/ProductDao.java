@@ -4,27 +4,20 @@ import model.Product;
 import model.Supplier;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
-//import org.hibernate.Query;
+import org.hibernate.Query;
 import util.HibernateUtil;
 import util.LogUtil;
 
 import java.util.List;
-import org.hibernate.Query;
 
 /**
- * Data Access Object for Product operations using Hibernate.
+ * FIXED: ProductDao with proper RMI serialization handling
  */
 public class ProductDao {
     
-    /**
-     * Creates a new product in the database
-     * 
-     * @param product The product to create
-     * @return The created product with generated ID, or null if failed
-     */
     public Product createProduct(Product product) {
         Transaction transaction = null;
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             transaction = session.beginTransaction();
             session.save(product);
@@ -40,15 +33,9 @@ public class ProductDao {
         }
     }
     
-    /**
-     * Updates an existing product in the database
-     * 
-     * @param product The product to update
-     * @return The updated product, or null if failed
-     */
     public Product updateProduct(Product product) {
         Transaction transaction = null;
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             transaction = session.beginTransaction();
             session.update(product);
@@ -64,17 +51,11 @@ public class ProductDao {
         }
     }
     
-    /**
-     * Updates the stock quantity of a product
-     * 
-     * @param productId The ID of the product
-     * @param quantity The quantity to add (negative to remove)
-     * @return Number of rows affected
-     */
     public int updateProductStock(int productId, int quantity) {
         Transaction transaction = null;
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
             transaction = session.beginTransaction();
             Query query = session.createQuery(
                 "UPDATE Product p SET p.stockQuantity = p.stockQuantity + :quantity WHERE p.id = :id");
@@ -90,20 +71,20 @@ public class ProductDao {
             }
             LogUtil.error("Failed to update stock for product ID: " + productId, e);
             return 0;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
-    /**
-     * Finds a product by ID
-     * 
-     * @param id The product ID to search for
-     * @return The product if found, null otherwise
-     */
     public Product findProductById(int id) {
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
             Product product = (Product) session.get(Product.class, id);
             if (product != null) {
+                session.evict(product); // Detach for RMI
                 LogUtil.debug("Found product by ID: " + id);
             } else {
                 LogUtil.debug("Product not found with ID: " + id);
@@ -112,24 +93,24 @@ public class ProductDao {
         } catch (Exception e) {
             LogUtil.error("Error finding product by ID: " + id, e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
-    /**
-     * Finds a product by product code
-     * 
-     * @param productCode The product code to search for
-     * @return The product if found, null otherwise
-     */
     public Product findProductByCode(String productCode) {
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "FROM Product p WHERE p.productCode = :productCode");
             query.setParameter("productCode", productCode);
             Product product = (Product) query.uniqueResult();
             
             if (product != null) {
+                session.evict(product);
                 LogUtil.debug("Found product by code: " + productCode);
             } else {
                 LogUtil.debug("Product not found with code: " + productCode);
@@ -138,126 +119,151 @@ public class ProductDao {
         } catch (Exception e) {
             LogUtil.error("Error finding product by code: " + productCode, e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
-    /**
-     * Finds products by name
-     * 
-     * @param name The name to search for
-     * @return List of matching products
-     */
     public List<Product> findProductsByName(String name) {
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "FROM Product p WHERE p.name LIKE :name");
             query.setParameter("name", "%" + name + "%");
             List<Product> products = query.list();
+            
+            // Detach all products
+            for (Product product : products) {
+                session.evict(product);
+            }
+            
             LogUtil.debug("Found " + products.size() + " products matching name: " + name);
             return products;
         } catch (Exception e) {
             LogUtil.error("Error finding products by name: " + name, e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
-    /**
-     * Finds products by category
-     * 
-     * @param category The category to search for
-     * @return List of matching products
-     */
     public List<Product> findProductsByCategory(String category) {
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "FROM Product p WHERE p.category = :category");
             query.setParameter("category", category);
             List<Product> products = query.list();
+            
+            for (Product product : products) {
+                session.evict(product);
+            }
+            
             LogUtil.debug("Found " + products.size() + " products in category: " + category);
             return products;
         } catch (Exception e) {
             LogUtil.error("Error finding products by category: " + category, e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
-    /**
-     * Finds products by supplier
-     * 
-     * @param supplier The supplier to search for
-     * @return List of matching products
-     */
     public List<Product> findProductsBySupplier(Supplier supplier) {
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
-                "FROM Product p WHERE p.supplier = :supplier");
-            query.setParameter("supplier", supplier);
+                "FROM Product p WHERE p.supplier.id = :supplierId");
+            query.setParameter("supplierId", supplier.getId());
             List<Product> products = query.list();
+            
+            for (Product product : products) {
+                session.evict(product);
+            }
+            
             LogUtil.debug("Found " + products.size() + " products for supplier: " + supplier.getName());
             return products;
         } catch (Exception e) {
             LogUtil.error("Error finding products by supplier: " + supplier.getId(), e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
-    /**
-     * Finds products with low stock below a threshold
-     * 
-     * @param threshold The stock threshold
-     * @return List of products with stock below threshold
-     */
     public List<Product> findLowStockProducts(int threshold) {
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "FROM Product p WHERE p.stockQuantity < :threshold ORDER BY p.stockQuantity");
             query.setParameter("threshold", threshold);
             List<Product> products = query.list();
+            
+            for (Product product : products) {
+                session.evict(product);
+            }
+            
             LogUtil.debug("Found " + products.size() + " products with low stock (below " + threshold + ")");
             return products;
         } catch (Exception e) {
             LogUtil.error("Error finding low stock products with threshold: " + threshold, e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
-    /**
-     * Gets all products
-     * 
-     * @return List of all products
-     */
     public List<Product> findAllProducts() {
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery("FROM Product ORDER BY name");
             List<Product> products = query.list();
+            
+            for (Product product : products) {
+                session.evict(product);
+            }
+            
             LogUtil.debug("Found " + products.size() + " products in total");
             return products;
         } catch (Exception e) {
             LogUtil.error("Error finding all products", e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
-    /**
-     * Gets a product with its supplier information
-     * 
-     * @param productId The ID of the product
-     * @return The product with supplier loaded
-     */
     public Product getProductWithSupplier(int productId) {
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "FROM Product p LEFT JOIN FETCH p.supplier WHERE p.id = :id");
             query.setParameter("id", productId);
             Product product = (Product) query.uniqueResult();
             
             if (product != null) {
+                session.evict(product);
+                if (product.getSupplier() != null) {
+                    session.evict(product.getSupplier());
+                }
                 LogUtil.debug("Found product with supplier: " + productId);
             } else {
                 LogUtil.debug("Product not found with ID: " + productId);
@@ -266,18 +272,16 @@ public class ProductDao {
         } catch (Exception e) {
             LogUtil.error("Error finding product with supplier: " + productId, e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
-    /**
-     * Deletes a product from the database
-     * 
-     * @param product The product to delete
-     * @return The deleted product, or null if failed
-     */
     public Product deleteProduct(Product product) {
         Transaction transaction = null;
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             transaction = session.beginTransaction();
             session.delete(product);
@@ -293,15 +297,10 @@ public class ProductDao {
         }
     }
     
-    /**
-     * Checks if a product code already exists
-     * 
-     * @param productCode The product code to check
-     * @return true if exists, false otherwise
-     */
     public boolean productCodeExists(String productCode) {
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "SELECT COUNT(p) FROM Product p WHERE p.productCode = :productCode");
             query.setParameter("productCode", productCode);
@@ -310,17 +309,17 @@ public class ProductDao {
         } catch (Exception e) {
             LogUtil.error("Error checking if product code exists: " + productCode, e);
             return false;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
-    /**
-     * Gets all distinct categories
-     * 
-     * @return List of all categories
-     */
     public List<String> findAllCategories() {
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "SELECT DISTINCT p.category FROM Product p WHERE p.category IS NOT NULL ORDER BY p.category");
             List<String> categories = query.list();
@@ -329,6 +328,10 @@ public class ProductDao {
         } catch (Exception e) {
             LogUtil.error("Error finding all categories", e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
 }

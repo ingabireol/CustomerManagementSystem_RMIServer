@@ -40,7 +40,7 @@ public class Customer implements Serializable {
     @Column(name = "registration_date")
     private LocalDate registrationDate;
     
-    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     private List<Order> orders = new ArrayList<>();
     
     /**

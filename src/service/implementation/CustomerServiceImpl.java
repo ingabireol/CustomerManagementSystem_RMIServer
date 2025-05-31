@@ -7,6 +7,7 @@ import util.LogUtil;
 
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -53,7 +54,7 @@ public class CustomerServiceImpl extends UnicastRemoteObject implements Customer
                 LogUtil.warn("Attempted to create customer with existing customer ID: " + customer.getCustomerId());
                 return null;
             }
-            
+            customer.setOrders(new ArrayList<>(customer.getOrders()));
             return customerDao.createCustomer(customer);
         } catch (Exception e) {
             LogUtil.error("Error creating customer", e);
@@ -68,7 +69,7 @@ public class CustomerServiceImpl extends UnicastRemoteObject implements Customer
                 LogUtil.warn("Attempted to update invalid customer");
                 return null;
             }
-            
+             customer.setOrders(new ArrayList<>(customer.getOrders()));
             return customerDao.updateCustomer(customer);
         } catch (Exception e) {
             LogUtil.error("Error updating customer", e);
@@ -98,8 +99,9 @@ public class CustomerServiceImpl extends UnicastRemoteObject implements Customer
                 LogUtil.warn("Invalid customer ID provided: " + id);
                 return null;
             }
-            
-            return customerDao.findCustomerById(id);
+            Customer customer = customerDao.findCustomerById(id);
+            customer.setOrders(new ArrayList<>(customer.getOrders()));
+            return customer;
         } catch (Exception e) {
             LogUtil.error("Error finding customer by ID: " + id, e);
             throw new RemoteException("Failed to find customer by ID", e);
@@ -113,8 +115,10 @@ public class CustomerServiceImpl extends UnicastRemoteObject implements Customer
                 LogUtil.warn("Invalid customer ID provided");
                 return null;
             }
+            Customer customer = customerDao.findCustomerByCustomerId(customerId.trim());
+            customer.setOrders(new ArrayList<>(customer.getOrders()));
             
-            return customerDao.findCustomerByCustomerId(customerId.trim());
+            return customer;
         } catch (Exception e) {
             LogUtil.error("Error finding customer by customer ID: " + customerId, e);
             throw new RemoteException("Failed to find customer by customer ID", e);
@@ -143,8 +147,9 @@ public class CustomerServiceImpl extends UnicastRemoteObject implements Customer
                 LogUtil.warn("Invalid email provided");
                 return null;
             }
-            
-            return customerDao.findCustomerByEmail(email.trim());
+            Customer customer = findCustomerByEmail(email.trim());
+            customer.setOrders(new ArrayList<>(customer.getOrders()));
+            return customer;
         } catch (Exception e) {
             LogUtil.error("Error finding customer by email: " + email, e);
             throw new RemoteException("Failed to find customer by email", e);
@@ -168,8 +173,9 @@ public class CustomerServiceImpl extends UnicastRemoteObject implements Customer
                 LogUtil.warn("Invalid customer ID provided: " + customerId);
                 return null;
             }
-            
-            return customerDao.getCustomerWithOrders(customerId);
+            Customer customer = customerDao.getCustomerWithOrders(customerId);
+            customer.setOrders(new ArrayList<>(customer.getOrders()));
+            return customer;
         } catch (Exception e) {
             LogUtil.error("Error getting customer with orders: " + customerId, e);
             throw new RemoteException("Failed to get customer with orders", e);

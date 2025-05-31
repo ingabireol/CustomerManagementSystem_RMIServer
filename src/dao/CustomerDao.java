@@ -1,5 +1,6 @@
 package dao;
 
+import java.util.ArrayList;
 import model.Customer;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
@@ -10,19 +11,13 @@ import util.LogUtil;
 import java.util.List;
 
 /**
- * Data Access Object for Customer operations using Hibernate.
+ * FIXED: CustomerDao with proper RMI serialization handling
  */
 public class CustomerDao {
     
-    /**
-     * Creates a new customer in the database
-     * 
-     * @param customer The customer to create
-     * @return The created customer with generated ID, or null if failed
-     */
     public Customer createCustomer(Customer customer) {
         Transaction transaction = null;
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             transaction = session.beginTransaction();
             session.save(customer);
@@ -38,15 +33,9 @@ public class CustomerDao {
         }
     }
     
-    /**
-     * Updates an existing customer in the database
-     * 
-     * @param customer The customer to update
-     * @return The updated customer, or null if failed
-     */
     public Customer updateCustomer(Customer customer) {
         Transaction transaction = null;
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             transaction = session.beginTransaction();
             session.update(customer);
@@ -62,20 +51,15 @@ public class CustomerDao {
         }
     }
     
-    /**
-     * Deletes a customer from the database
-     * 
-     * @param customer The customer to delete
-     * @return The deleted customer, or null if failed
-     */
     public Customer deleteCustomer(Customer customer) {
         Transaction transaction = null;
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             transaction = session.beginTransaction();
             session.delete(customer);
             transaction.commit();
             LogUtil.info("Customer deleted successfully: " + customer.getCustomerId());
+            customer.setOrders(new ArrayList<>(customer.getOrders()));
             return customer;
         } catch (Exception e) {
             if (transaction != null) {
@@ -86,21 +70,18 @@ public class CustomerDao {
         }
     }
     
-    /**
-     * Finds a customer by ID
-     * 
-     * @param id The customer ID to search for
-     * @return The customer if found, null otherwise
-     */
     public Customer findCustomerById(int id) {
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             Customer customer = (Customer) session.get(Customer.class, id);
             if (customer != null) {
+                // Initialize for RMI serialization - detach from session
+                session.evict(customer);
                 LogUtil.debug("Found customer by ID: " + id);
             } else {
                 LogUtil.debug("Customer not found with ID: " + id);
             }
+            session.close();
             return customer;
         } catch (Exception e) {
             LogUtil.error("Error finding customer by ID: " + id, e);
@@ -108,14 +89,8 @@ public class CustomerDao {
         }
     }
     
-    /**
-     * Finds a customer by their customer ID
-     * 
-     * @param customerId The customer ID to search for
-     * @return The customer if found, null otherwise
-     */
     public Customer findCustomerByCustomerId(String customerId) {
-        try  {
+        try {
             Session session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "FROM Customer c WHERE c.customerId = :customerId");
@@ -123,10 +98,12 @@ public class CustomerDao {
             Customer customer = (Customer) query.uniqueResult();
             
             if (customer != null) {
+                session.evict(customer); // Detach for RMI
                 LogUtil.debug("Found customer by customer ID: " + customerId);
             } else {
                 LogUtil.debug("Customer not found with customer ID: " + customerId);
             }
+            session.close();
             return customer;
         } catch (Exception e) {
             LogUtil.error("Error finding customer by customer ID: " + customerId, e);
@@ -134,43 +111,45 @@ public class CustomerDao {
         }
     }
     
-    /**
-     * Finds customers by name (first name, last name, or full name)
-     * 
-     * @param name The name to search for
-     * @return List of matching customers
-     */
     public List<Customer> findCustomersByName(String name) {
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "FROM Customer c WHERE c.firstName LIKE :name OR c.lastName LIKE :name OR " +
                 "CONCAT(c.firstName, ' ', c.lastName) LIKE :name");
             query.setParameter("name", "%" + name + "%");
             List<Customer> customers = query.list();
+            
+            // Detach all customers from session for RMI serialization
+            for (Customer customer : customers) {
+                customer.setOrders(new ArrayList<>(customer.getOrders()));
+                session.evict(customer);
+            }
+            
             LogUtil.debug("Found " + customers.size() + " customers matching name: " + name);
             return customers;
         } catch (Exception e) {
             LogUtil.error("Error finding customers by name: " + name, e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
-    /**
-     * Finds a customer by email
-     * 
-     * @param email The email to search for
-     * @return The customer if found, null otherwise
-     */
     public Customer findCustomerByEmail(String email) {
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "FROM Customer c WHERE c.email = :email");
             query.setParameter("email", email);
             Customer customer = (Customer) query.uniqueResult();
             
             if (customer != null) {
+                session.evict(customer);
                 LogUtil.debug("Found customer by email: " + email);
             } else {
                 LogUtil.debug("Customer not found with email: " + email);
@@ -179,43 +158,60 @@ public class CustomerDao {
         } catch (Exception e) {
             LogUtil.error("Error finding customer by email: " + email, e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
-    /**
-     * Gets all customers
-     * 
-     * @return List of all customers
-     */
     public List<Customer> findAllCustomers() {
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery("FROM Customer ORDER BY firstName, lastName");
             List<Customer> customers = query.list();
+            
+            // Detach all customers from session
+            for (Customer customer : customers) {
+                customer.setOrders(new ArrayList<>(customer.getOrders()));
+                session.evict(customer);
+            }
+            
             LogUtil.debug("Found " + customers.size() + " customers in total");
             return customers;
         } catch (Exception e) {
             LogUtil.error("Error finding all customers", e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
-    /**
-     * Gets a customer with all their orders (using LEFT JOIN FETCH to avoid lazy loading issues)
-     * 
-     * @param customerId The ID of the customer
-     * @return The customer with orders loaded
-     */
     public Customer getCustomerWithOrders(int customerId) {
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
+            // Use explicit join to avoid lazy loading issues
             Query query = session.createQuery(
-                "FROM Customer c LEFT JOIN FETCH c.orders WHERE c.id = :id");
+                "SELECT DISTINCT c FROM Customer c LEFT JOIN FETCH c.orders WHERE c.id = :id");
             query.setParameter("id", customerId);
             Customer customer = (Customer) query.uniqueResult();
             
             if (customer != null) {
-                LogUtil.debug("Found customer with orders: " + customerId + ", Orders count: " + customer.getOrders().size());
+                // Force initialization of orders collection
+                customer.getOrders().size();
+                session.evict(customer);
+                // Also evict orders to prevent proxy issues
+                if (customer.getOrders() != null) {
+                    for (Object order : customer.getOrders()) {
+                        session.evict(order);
+                    }
+                }
+                LogUtil.debug("Found customer with orders: " + customerId + 
+                             ", Orders count: " + customer.getOrders().size());
             } else {
                 LogUtil.debug("Customer not found with ID: " + customerId);
             }
@@ -223,18 +219,17 @@ public class CustomerDao {
         } catch (Exception e) {
             LogUtil.error("Error finding customer with orders: " + customerId, e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
-    /**
-     * Checks if a customer ID already exists
-     * 
-     * @param customerId The customer ID to check
-     * @return true if exists, false otherwise
-     */
     public boolean customerIdExists(String customerId) {
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "SELECT COUNT(c) FROM Customer c WHERE c.customerId = :customerId");
             query.setParameter("customerId", customerId);
@@ -243,18 +238,17 @@ public class CustomerDao {
         } catch (Exception e) {
             LogUtil.error("Error checking if customer ID exists: " + customerId, e);
             return false;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
-    /**
-     * Checks if an email already exists
-     * 
-     * @param email The email to check
-     * @return true if exists, false otherwise
-     */
     public boolean emailExists(String email) {
-        try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+        Session session = null;
+        try {
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "SELECT COUNT(c) FROM Customer c WHERE c.email = :email");
             query.setParameter("email", email);
@@ -263,6 +257,10 @@ public class CustomerDao {
         } catch (Exception e) {
             LogUtil.error("Error checking if email exists: " + email, e);
             return false;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
 }

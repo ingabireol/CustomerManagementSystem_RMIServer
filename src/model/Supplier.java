@@ -35,7 +35,7 @@ public class Supplier implements Serializable {
     @Column(length = 500)
     private String address;
     
-    @OneToMany(mappedBy = "supplier", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "supplier", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     private List<Product> products = new ArrayList<>();
     
     /**
