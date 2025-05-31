@@ -11,10 +11,11 @@ import util.HibernateUtil;
 import util.LogUtil;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Data Access Object for Order operations using Hibernate.
+ * FIXED: OrderDao with proper RMI serialization handling
  */
 public class OrderDao {
     
@@ -47,6 +48,15 @@ public class OrderDao {
             }
             
             transaction.commit();
+            
+            // Fix RMI serialization - convert Hibernate collections to ArrayList
+            if (order.getOrderItems() != null) {
+                order.setOrderItems(new ArrayList<>(order.getOrderItems()));
+            }
+            if (order.getInvoices() != null) {
+                order.setInvoices(new ArrayList<>(order.getInvoices()));
+            }
+            
             LogUtil.info("Order created successfully: " + order.getOrderId());
             return order;
         } catch (Exception e) {
@@ -71,6 +81,15 @@ public class OrderDao {
             transaction = session.beginTransaction();
             session.update(order);
             transaction.commit();
+            
+            // Fix RMI serialization
+            if (order.getOrderItems() != null) {
+                order.setOrderItems(new ArrayList<>(order.getOrderItems()));
+            }
+            if (order.getInvoices() != null) {
+                order.setInvoices(new ArrayList<>(order.getInvoices()));
+            }
+            
             LogUtil.info("Order updated successfully: " + order.getOrderId());
             return order;
         } catch (Exception e) {
@@ -118,10 +137,19 @@ public class OrderDao {
      * @return The order if found, null otherwise
      */
     public Order findOrderById(int id) {
+        Session session = null;
         try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+            session = HibernateUtil.getSessionFactory().openSession();
             Order order = (Order) session.get(Order.class, id);
             if (order != null) {
+                session.evict(order);
+                // Fix RMI serialization
+                if (order.getOrderItems() != null) {
+                    order.setOrderItems(new ArrayList<>(order.getOrderItems()));
+                }
+                if (order.getInvoices() != null) {
+                    order.setInvoices(new ArrayList<>(order.getInvoices()));
+                }
                 LogUtil.debug("Found order by ID: " + id);
             } else {
                 LogUtil.debug("Order not found with ID: " + id);
@@ -130,6 +158,10 @@ public class OrderDao {
         } catch (Exception e) {
             LogUtil.error("Error finding order by ID: " + id, e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
@@ -140,14 +172,23 @@ public class OrderDao {
      * @return The order if found, null otherwise
      */
     public Order findOrderByOrderId(String orderId) {
+        Session session = null;
         try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "FROM Order o WHERE o.orderId = :orderId");
             query.setParameter("orderId", orderId);
             Order order = (Order) query.uniqueResult();
             
             if (order != null) {
+                session.evict(order);
+                // Fix RMI serialization
+                if (order.getOrderItems() != null) {
+                    order.setOrderItems(new ArrayList<>(order.getOrderItems()));
+                }
+                if (order.getInvoices() != null) {
+                    order.setInvoices(new ArrayList<>(order.getInvoices()));
+                }
                 LogUtil.debug("Found order by order ID: " + orderId);
             } else {
                 LogUtil.debug("Order not found with order ID: " + orderId);
@@ -156,6 +197,10 @@ public class OrderDao {
         } catch (Exception e) {
             LogUtil.error("Error finding order by order ID: " + orderId, e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
@@ -166,17 +211,34 @@ public class OrderDao {
      * @return List of matching orders
      */
     public List<Order> findOrdersByCustomer(Customer customer) {
+        Session session = null;
         try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "FROM Order o WHERE o.customer = :customer ORDER BY o.orderDate DESC");
             query.setParameter("customer", customer);
             List<Order> orders = query.list();
+            
+            // Fix RMI serialization for all orders
+            for (Order order : orders) {
+                session.evict(order);
+                if (order.getOrderItems() != null) {
+                    order.setOrderItems(new ArrayList<>(order.getOrderItems()));
+                }
+                if (order.getInvoices() != null) {
+                    order.setInvoices(new ArrayList<>(order.getInvoices()));
+                }
+            }
+            
             LogUtil.debug("Found " + orders.size() + " orders for customer: " + customer.getFullName());
             return orders;
         } catch (Exception e) {
             LogUtil.error("Error finding orders by customer: " + customer.getId(), e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
@@ -187,17 +249,34 @@ public class OrderDao {
      * @return List of matching orders
      */
     public List<Order> findOrdersByStatus(String status) {
+        Session session = null;
         try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "FROM Order o WHERE o.status = :status ORDER BY o.orderDate DESC");
             query.setParameter("status", status);
             List<Order> orders = query.list();
+            
+            // Fix RMI serialization for all orders
+            for (Order order : orders) {
+                session.evict(order);
+                if (order.getOrderItems() != null) {
+                    order.setOrderItems(new ArrayList<>(order.getOrderItems()));
+                }
+                if (order.getInvoices() != null) {
+                    order.setInvoices(new ArrayList<>(order.getInvoices()));
+                }
+            }
+            
             LogUtil.debug("Found " + orders.size() + " orders with status: " + status);
             return orders;
         } catch (Exception e) {
             LogUtil.error("Error finding orders by status: " + status, e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
@@ -209,18 +288,35 @@ public class OrderDao {
      * @return List of matching orders
      */
     public List<Order> findOrdersByDateRange(LocalDate startDate, LocalDate endDate) {
+        Session session = null;
         try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "FROM Order o WHERE o.orderDate BETWEEN :startDate AND :endDate ORDER BY o.orderDate DESC");
             query.setParameter("startDate", startDate);
             query.setParameter("endDate", endDate);
             List<Order> orders = query.list();
+            
+            // Fix RMI serialization for all orders
+            for (Order order : orders) {
+                session.evict(order);
+                if (order.getOrderItems() != null) {
+                    order.setOrderItems(new ArrayList<>(order.getOrderItems()));
+                }
+                if (order.getInvoices() != null) {
+                    order.setInvoices(new ArrayList<>(order.getInvoices()));
+                }
+            }
+            
             LogUtil.debug("Found " + orders.size() + " orders between " + startDate + " and " + endDate);
             return orders;
         } catch (Exception e) {
             LogUtil.error("Error finding orders by date range: " + startDate + " to " + endDate, e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
@@ -230,15 +326,32 @@ public class OrderDao {
      * @return List of all orders
      */
     public List<Order> findAllOrders() {
+        Session session = null;
         try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery("FROM Order ORDER BY orderDate DESC");
             List<Order> orders = query.list();
+            
+            // Fix RMI serialization for all orders
+            for (Order order : orders) {
+                session.evict(order);
+                if (order.getOrderItems() != null) {
+                    order.setOrderItems(new ArrayList<>(order.getOrderItems()));
+                }
+                if (order.getInvoices() != null) {
+                    order.setInvoices(new ArrayList<>(order.getInvoices()));
+                }
+            }
+            
             LogUtil.debug("Found " + orders.size() + " orders in total");
             return orders;
         } catch (Exception e) {
             LogUtil.error("Error finding all orders", e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
@@ -249,14 +362,47 @@ public class OrderDao {
      * @return The order with items and customer loaded
      */
     public Order getOrderWithDetails(int orderId) {
+        Session session = null;
         try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "FROM Order o LEFT JOIN FETCH o.customer LEFT JOIN FETCH o.orderItems oi LEFT JOIN FETCH oi.product WHERE o.id = :id");
             query.setParameter("id", orderId);
             Order order = (Order) query.uniqueResult();
             
             if (order != null) {
+                // Force initialization of collections
+                order.getOrderItems().size();
+                if (order.getInvoices() != null) {
+                    order.getInvoices().size();
+                }
+                
+                // Detach from session
+                session.evict(order);
+                if (order.getCustomer() != null) {
+                    session.evict(order.getCustomer());
+                }
+                
+                // Detach order items and their products
+                if (order.getOrderItems() != null) {
+                    for (OrderItem item : order.getOrderItems()) {
+                        session.evict(item);
+                        if (item.getProduct() != null) {
+                            session.evict(item.getProduct());
+                        }
+                    }
+                    // Fix RMI serialization
+                    order.setOrderItems(new ArrayList<>(order.getOrderItems()));
+                }
+                
+                // Fix RMI serialization for invoices
+                if (order.getInvoices() != null) {
+                    for (Object invoice : order.getInvoices()) {
+                        session.evict(invoice);
+                    }
+                    order.setInvoices(new ArrayList<>(order.getInvoices()));
+                }
+                
                 LogUtil.debug("Found order with details: " + orderId + ", Items count: " + order.getOrderItems().size());
             } else {
                 LogUtil.debug("Order not found with ID: " + orderId);
@@ -265,6 +411,10 @@ public class OrderDao {
         } catch (Exception e) {
             LogUtil.error("Error finding order with details: " + orderId, e);
             return null;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
     
@@ -292,6 +442,15 @@ public class OrderDao {
             // Delete the order (cascade will handle order items)
             session.delete(order);
             transaction.commit();
+            
+            // Fix RMI serialization
+            if (order.getOrderItems() != null) {
+                order.setOrderItems(new ArrayList<>(order.getOrderItems()));
+            }
+            if (order.getInvoices() != null) {
+                order.setInvoices(new ArrayList<>(order.getInvoices()));
+            }
+            
             LogUtil.info("Order deleted successfully: " + order.getOrderId());
             return order;
         } catch (Exception e) {
@@ -310,8 +469,9 @@ public class OrderDao {
      * @return true if exists, false otherwise
      */
     public boolean orderIdExists(String orderId) {
+        Session session = null;
         try  {
-            Session session = HibernateUtil.getSessionFactory().openSession();
+            session = HibernateUtil.getSessionFactory().openSession();
             Query query = session.createQuery(
                 "SELECT COUNT(o) FROM Order o WHERE o.orderId = :orderId");
             query.setParameter("orderId", orderId);
@@ -320,6 +480,10 @@ public class OrderDao {
         } catch (Exception e) {
             LogUtil.error("Error checking if order ID exists: " + orderId, e);
             return false;
+        } finally {
+            if (session != null) {
+                session.close();
+            }
         }
     }
 }

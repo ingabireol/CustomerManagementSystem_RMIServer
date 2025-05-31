@@ -7,6 +7,7 @@ import org.hibernate.Query;
 import util.HibernateUtil;
 import util.LogUtil;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -22,6 +23,10 @@ public class SupplierDao {
             session.save(supplier);
             transaction.commit();
             LogUtil.info("Supplier created successfully: " + supplier.getSupplierCode());
+            // Fix RMI serialization
+            if (supplier.getProducts() != null) {
+                supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+            }
             return supplier;
         } catch (Exception e) {
             if (transaction != null) {
@@ -40,6 +45,10 @@ public class SupplierDao {
             session.update(supplier);
             transaction.commit();
             LogUtil.info("Supplier updated successfully: " + supplier.getSupplierCode());
+            // Fix RMI serialization
+            if (supplier.getProducts() != null) {
+                supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+            }
             return supplier;
         } catch (Exception e) {
             if (transaction != null) {
@@ -58,6 +67,10 @@ public class SupplierDao {
             session.delete(supplier);
             transaction.commit();
             LogUtil.info("Supplier deleted successfully: " + supplier.getSupplierCode());
+            // Fix RMI serialization
+            if (supplier.getProducts() != null) {
+                supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+            }
             return supplier;
         } catch (Exception e) {
             if (transaction != null) {
@@ -75,6 +88,10 @@ public class SupplierDao {
             Supplier supplier = (Supplier) session.get(Supplier.class, id);
             if (supplier != null) {
                 session.evict(supplier); // Detach for RMI
+                // Fix RMI serialization - convert Hibernate collection to ArrayList
+                if (supplier.getProducts() != null) {
+                    supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+                }
                 LogUtil.debug("Found supplier by ID: " + id);
             } else {
                 LogUtil.debug("Supplier not found with ID: " + id);
@@ -101,6 +118,10 @@ public class SupplierDao {
             
             if (supplier != null) {
                 session.evict(supplier);
+                // Fix RMI serialization
+                if (supplier.getProducts() != null) {
+                    supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+                }
                 LogUtil.debug("Found supplier by code: " + supplierCode);
             } else {
                 LogUtil.debug("Supplier not found with code: " + supplierCode);
@@ -125,9 +146,12 @@ public class SupplierDao {
             query.setParameter("name", "%" + name + "%");
             List<Supplier> suppliers = query.list();
             
-            // Detach all suppliers
+            // Detach all suppliers and fix RMI serialization
             for (Supplier supplier : suppliers) {
                 session.evict(supplier);
+                if (supplier.getProducts() != null) {
+                    supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+                }
             }
             
             LogUtil.debug("Found " + suppliers.size() + " suppliers matching name: " + name);
@@ -153,6 +177,10 @@ public class SupplierDao {
             
             if (supplier != null) {
                 session.evict(supplier);
+                // Fix RMI serialization
+                if (supplier.getProducts() != null) {
+                    supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+                }
                 LogUtil.debug("Found supplier by email: " + email);
             } else {
                 LogUtil.debug("Supplier not found with email: " + email);
@@ -175,9 +203,12 @@ public class SupplierDao {
             Query query = session.createQuery("FROM Supplier ORDER BY name");
             List<Supplier> suppliers = query.list();
             
-            // Detach all suppliers to avoid proxy issues
+            // Detach all suppliers to avoid proxy issues and fix RMI serialization
             for (Supplier supplier : suppliers) {
                 session.evict(supplier);
+                if (supplier.getProducts() != null) {
+                    supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+                }
             }
             
             LogUtil.debug("Found " + suppliers.size() + " suppliers in total");
@@ -205,10 +236,13 @@ public class SupplierDao {
                 // Force initialization and detach
                 supplier.getProducts().size();
                 session.evict(supplier);
+                // Also evict all products to prevent proxy issues
                 if (supplier.getProducts() != null) {
                     for (Object product : supplier.getProducts()) {
                         session.evict(product);
                     }
+                    // Fix RMI serialization - convert to ArrayList
+                    supplier.setProducts(new ArrayList<>(supplier.getProducts()));
                 }
                 LogUtil.debug("Found supplier with products: " + supplierId + 
                              ", Products count: " + supplier.getProducts().size());
@@ -273,8 +307,12 @@ public class SupplierDao {
             query.setParameter("contactPerson", "%" + contactPerson + "%");
             List<Supplier> suppliers = query.list();
             
+            // Fix RMI serialization for all suppliers
             for (Supplier supplier : suppliers) {
                 session.evict(supplier);
+                if (supplier.getProducts() != null) {
+                    supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+                }
             }
             
             LogUtil.debug("Found " + suppliers.size() + " suppliers with contact person: " + contactPerson);

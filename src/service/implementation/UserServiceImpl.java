@@ -1,21 +1,26 @@
 package service.implementation;
 
 import dao.UserDao;
+import model.OTP;
 import model.User;
+import service.OTPService;
 import service.UserService;
 import util.LogUtil;
+import util.OTPUtil;
 
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Implementation of UserService interface.
- * Handles business logic for user management and authentication operations.
+ * Enhanced implementation of UserService interface.
+ * Handles business logic for user management and authentication operations including OTP login.
  */
 public class UserServiceImpl extends UnicastRemoteObject implements UserService {
     
     private UserDao userDao;
+    private OTPService otpService;
     
     /**
      * Constructor
@@ -25,7 +30,14 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
     public UserServiceImpl() throws RemoteException {
         super();
         this.userDao = new UserDao();
-        LogUtil.info("UserService initialized");
+        // Initialize OTP service
+        try {
+            this.otpService = new OTPServiceImpl();
+        } catch (RemoteException e) {
+            LogUtil.error("Failed to initialize OTP service", e);
+            throw e;
+        }
+        LogUtil.info("Enhanced UserService initialized with OTP support");
     }
     
     @Override
@@ -49,6 +61,12 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
             
             if (user.getEmail() == null || user.getEmail().trim().isEmpty()) {
                 LogUtil.warn("Attempted to create user without email");
+                return null;
+            }
+            
+            // Validate email format
+            if (!isValidEmail(user.getEmail())) {
+                LogUtil.warn("Attempted to create user with invalid email format: " + user.getEmail());
                 return null;
             }
             
@@ -178,7 +196,7 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
                 return null;
             }
             
-            return userDao.findUserByEmail(email.trim());
+            return userDao.findUserByEmail(email.trim().toLowerCase());
         } catch (Exception e) {
             LogUtil.error("Error finding user by email: " + email, e);
             throw new RemoteException("Failed to find user by email", e);
@@ -231,6 +249,210 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
     }
     
     @Override
+    public boolean initiateOTPLogin(String email) throws RemoteException {
+        try {
+            if (email == null || email.trim().isEmpty()) {
+                LogUtil.warn("Attempted OTP login with empty email");
+                return false;
+            }
+            
+            email = email.trim().toLowerCase();
+            
+            // Validate email format
+            if (!isValidEmail(email)) {
+                LogUtil.warn("Attempted OTP login with invalid email format: " + email);
+                return false;
+            }
+            
+            // Check if user exists with this email
+            User user = userDao.findUserByEmail(email);
+            if (user == null) {
+                LogUtil.warn("Attempted OTP login for non-existent user: " + email);
+                return false;
+            }
+            
+            if (!user.isActive()) {
+                LogUtil.warn("Attempted OTP login for inactive user: " + email);
+                return false;
+            }
+            
+            // Check rate limiting
+            if (isOTPRateLimited(email)) {
+                LogUtil.warn("OTP login rate limited for email: " + email);
+                return false;
+            }
+            
+            // Generate and send OTP
+            OTP otp = otpService.generateLoginOTP(email);
+            if (otp == null) {
+                LogUtil.error("Failed to generate OTP for email: " + email);
+                return false;
+            }
+            
+            LogUtil.info("OTP login initiated successfully for email: " + email);
+            return true;
+            
+        } catch (Exception e) {
+            LogUtil.error("Error initiating OTP login for email: " + email, e);
+            throw new RemoteException("Failed to initiate OTP login", e);
+        }
+    }
+    
+    @Override
+    public User completeOTPLogin(String email, String otpCode) throws RemoteException {
+        try {
+            if (email == null || email.trim().isEmpty()) {
+                LogUtil.warn("Attempted to complete OTP login with empty email");
+                return null;
+            }
+            
+            if (otpCode == null || otpCode.trim().isEmpty()) {
+                LogUtil.warn("Attempted to complete OTP login with empty OTP code");
+                return null;
+            }
+            
+            email = email.trim().toLowerCase();
+            otpCode = otpCode.trim();
+            
+            // Verify OTP
+            OTP verifiedOTP = otpService.verifyLoginOTP(email, otpCode);
+            if (verifiedOTP == null) {
+                LogUtil.warn("Invalid OTP provided for email: " + email);
+                return null;
+            }
+            
+            // Get user
+            User user = userDao.findUserByEmail(email);
+            if (user == null || !user.isActive()) {
+                LogUtil.warn("User not found or inactive during OTP login completion: " + email);
+                return null;
+            }
+            
+            // Update last login time
+            userDao.updateLastLogin(user.getId());
+            user.updateLastLogin();
+            
+            LogUtil.info("OTP login completed successfully for user: " + email);
+            return user;
+            
+        } catch (Exception e) {
+            LogUtil.error("Error completing OTP login for email: " + email, e);
+            throw new RemoteException("Failed to complete OTP login", e);
+        }
+    }
+    
+    @Override
+    public boolean initiatePasswordReset(String email) throws RemoteException {
+        try {
+            if (email == null || email.trim().isEmpty()) {
+                LogUtil.warn("Attempted password reset with empty email");
+                return false;
+            }
+            
+            email = email.trim().toLowerCase();
+            
+            // Validate email format
+            if (!isValidEmail(email)) {
+                LogUtil.warn("Attempted password reset with invalid email format: " + email);
+                return false;
+            }
+            
+            // Check if user exists with this email
+            User user = userDao.findUserByEmail(email);
+            if (user == null) {
+                LogUtil.warn("Attempted password reset for non-existent user: " + email);
+                // For security, we return true even if user doesn't exist
+                // This prevents email enumeration attacks
+                return true;
+            }
+            
+            if (!user.isActive()) {
+                LogUtil.warn("Attempted password reset for inactive user: " + email);
+                return false;
+            }
+            
+            // Generate and send password reset OTP
+            OTP otp = otpService.generateAndSendOTP(email, OTP.TYPE_PASSWORD_RESET, null, null);
+            if (otp == null) {
+                LogUtil.error("Failed to generate password reset OTP for email: " + email);
+                return false;
+            }
+            
+            LogUtil.info("Password reset initiated successfully for email: " + email);
+            return true;
+            
+        } catch (Exception e) {
+            LogUtil.error("Error initiating password reset for email: " + email, e);
+            throw new RemoteException("Failed to initiate password reset", e);
+        }
+    }
+    
+    @Override
+    public boolean verifyPasswordResetOTP(String email, String otpCode) throws RemoteException {
+        try {
+            if (email == null || email.trim().isEmpty() || otpCode == null || otpCode.trim().isEmpty()) {
+                return false;
+            }
+            
+            email = email.trim().toLowerCase();
+            otpCode = otpCode.trim();
+            
+            // Verify OTP
+            OTP verifiedOTP = otpService.verifyOTP(email, otpCode, OTP.TYPE_PASSWORD_RESET);
+            return verifiedOTP != null;
+            
+        } catch (Exception e) {
+            LogUtil.error("Error verifying password reset OTP for email: " + email, e);
+            throw new RemoteException("Failed to verify password reset OTP", e);
+        }
+    }
+    
+    @Override
+    public boolean completePasswordReset(String email, String otpCode, String newPassword) throws RemoteException {
+        try {
+            if (email == null || email.trim().isEmpty() || 
+                otpCode == null || otpCode.trim().isEmpty() ||
+                newPassword == null || newPassword.trim().isEmpty()) {
+                return false;
+            }
+            
+            email = email.trim().toLowerCase();
+            otpCode = otpCode.trim();
+            
+            if (newPassword.length() < 6) {
+                LogUtil.warn("Password too short for password reset: " + email);
+                return false;
+            }
+            
+            // Verify OTP again for security
+            OTP verifiedOTP = otpService.verifyOTP(email, otpCode, OTP.TYPE_PASSWORD_RESET);
+            if (verifiedOTP == null) {
+                LogUtil.warn("Invalid OTP for password reset completion: " + email);
+                return false;
+            }
+            
+            // Get user and update password
+            User user = userDao.findUserByEmail(email);
+            if (user == null || !user.isActive()) {
+                LogUtil.warn("User not found or inactive during password reset: " + email);
+                return false;
+            }
+            
+            int result = userDao.updatePassword(user.getId(), newPassword);
+            if (result > 0) {
+                LogUtil.info("Password reset completed successfully for user: " + email);
+                return true;
+            }
+            
+            return false;
+            
+        } catch (Exception e) {
+            LogUtil.error("Error completing password reset for email: " + email, e);
+            throw new RemoteException("Failed to complete password reset", e);
+        }
+    }
+    
+    @Override
     public boolean usernameExists(String username) throws RemoteException {
         try {
             if (username == null || username.trim().isEmpty()) {
@@ -251,7 +473,7 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
                 return false;
             }
             
-            return userDao.emailExists(email.trim());
+            return userDao.emailExists(email.trim().toLowerCase());
         } catch (Exception e) {
             LogUtil.error("Error checking if email exists: " + email, e);
             throw new RemoteException("Failed to check email existence", e);
@@ -265,6 +487,57 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
         } catch (Exception e) {
             LogUtil.error("Error creating default admin user", e);
             throw new RemoteException("Failed to create default admin user", e);
+        }
+    }
+    
+    @Override
+    public boolean isValidEmail(String email) throws RemoteException {
+        return OTPUtil.isValidEmail(email);
+    }
+    
+    @Override
+    public boolean isOTPRateLimited(String email) throws RemoteException {
+        try {
+            if (email == null || email.trim().isEmpty()) {
+                return true;
+            }
+            
+            return otpService.isRateLimited(email.trim().toLowerCase(), OTP.TYPE_LOGIN);
+        } catch (Exception e) {
+            LogUtil.error("Error checking OTP rate limit for email: " + email, e);
+            // Return true (rate limited) on error for safety
+            return true;
+        }
+    }
+    
+    @Override
+    public int getOTPCooldownMinutes(String email) throws RemoteException {
+        try {
+            if (email == null || email.trim().isEmpty()) {
+                return 0;
+            }
+            
+            email = email.trim().toLowerCase();
+            
+            // Get latest OTP
+            OTP latestOTP = otpService.getLatestOTP(email, OTP.TYPE_LOGIN);
+            if (latestOTP == null) {
+                return 0;
+            }
+            
+            // Calculate time remaining until next OTP can be sent
+            LocalDateTime nextAllowedTime = latestOTP.getCreatedAt().plusMinutes(OTPUtil.MIN_RESEND_INTERVAL_MINUTES);
+            LocalDateTime now = LocalDateTime.now();
+            
+            if (now.isAfter(nextAllowedTime)) {
+                return 0;
+            }
+            
+            return (int) java.time.Duration.between(now, nextAllowedTime).toMinutes() + 1;
+            
+        } catch (Exception e) {
+            LogUtil.error("Error getting OTP cooldown for email: " + email, e);
+            throw new RemoteException("Failed to get OTP cooldown", e);
         }
     }
 }

@@ -7,31 +7,40 @@
     <property name="hibernate.connection.url">jdbc:postgresql://localhost:5432/taxation</property>
     <property name="hibernate.connection.username">postgres</property>
     <property name="hibernate.connection.password">078868</property>
+    
     <!-- Connection pool settings -->
     <property name="hibernate.c3p0.min_size">5</property>
     <property name="hibernate.c3p0.max_size">20</property>
     <property name="hibernate.c3p0.timeout">300</property>
     <property name="hibernate.c3p0.max_statements">50</property>
     <property name="hibernate.c3p0.idle_test_period">3000</property>
+    
     <!-- PostgreSQL dialect -->
     <property name="hibernate.dialect">org.hibernate.dialect.PostgreSQLDialect</property>
-    <!-- FIXED: Disable automatic schema updates to prevent column type issues -->
-    <property name="hibernate.hbm2ddl.auto">validate</property>
+    
+    <!-- Schema management -->
+    <property name="hibernate.hbm2ddl.auto">update</property>
+    
     <!-- Show SQL for debugging -->
     <property name="hibernate.show_sql">true</property>
     <property name="hibernate.format_sql">false</property>
-    <!-- FIXED: Disable lazy loading to prevent RMI serialization issues -->
+    
+    <!-- RMI serialization settings -->
     <property name="hibernate.enable_lazy_load_no_trans">false</property>
     <property name="hibernate.max_fetch_depth">3</property>
-    <!-- FIXED: Configure proper date/time handling -->
+    
+    <!-- Date/time handling -->
     <property name="hibernate.jdbc.time_zone">UTC</property>
+    
     <!-- Transaction settings -->
     <property name="hibernate.current_session_context_class">thread</property>
     <property name="hibernate.transaction.factory_class">org.hibernate.transaction.JDBCTransactionFactory</property>
+    
     <!-- Performance settings -->
     <property name="hibernate.cache.use_second_level_cache">false</property>
     <property name="hibernate.cache.use_query_cache">false</property>
-    <!-- FIXED: Entity mappings using JPA annotations -->
+    
+    <!-- Entity mappings using JPA annotations -->
     <mapping class="model.User"/>
     <mapping class="model.Customer"/>
     <mapping class="model.Product"/>
@@ -40,5 +49,8 @@
     <mapping class="model.OrderItem"/>
     <mapping class="model.Invoice"/>
     <mapping class="model.Payment"/>
+    <!-- NEW: OTP entity mapping -->
+    <mapping class="model.OTP"/>
+    
   </session-factory>
 </hibernate-configuration>

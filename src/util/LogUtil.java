@@ -49,6 +49,7 @@ public class LogUtil {
         System.out.println("[WARN] " + LocalDateTime.now().format(formatter) + " - " + message);
     }
     
+    
     /**
      * Log debug message
      * 
@@ -56,5 +57,12 @@ public class LogUtil {
      */
     public static void debug(String message) {
         System.out.println("[DEBUG] " + LocalDateTime.now().format(formatter) + " - " + message);
+    }
+
+    public static void warn(String message, Exception e) {
+        System.out.println("[WARN] " + LocalDateTime.now().format(formatter) + " - " + message);
+        if (e != null) {
+            e.printStackTrace();
+        }
     }
 }

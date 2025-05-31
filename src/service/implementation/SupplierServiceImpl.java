@@ -7,11 +7,11 @@ import util.LogUtil;
 
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Implementation of SupplierService interface.
- * Handles business logic for supplier operations.
+ * FIXED: SupplierServiceImpl with proper RMI serialization handling
  */
 public class SupplierServiceImpl extends UnicastRemoteObject implements SupplierService {
     
@@ -54,7 +54,19 @@ public class SupplierServiceImpl extends UnicastRemoteObject implements Supplier
                 return null;
             }
             
-            return supplierDao.createSupplier(supplier);
+            // Fix RMI serialization before calling DAO
+            if (supplier.getProducts() != null) {
+                supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+            }
+            
+            Supplier result = supplierDao.createSupplier(supplier);
+            
+            // Ensure result is also RMI-safe
+            if (result != null && result.getProducts() != null) {
+                result.setProducts(new ArrayList<>(result.getProducts()));
+            }
+            
+            return result;
         } catch (Exception e) {
             LogUtil.error("Error creating supplier", e);
             throw new RemoteException("Failed to create supplier", e);
@@ -69,7 +81,19 @@ public class SupplierServiceImpl extends UnicastRemoteObject implements Supplier
                 return null;
             }
             
-            return supplierDao.updateSupplier(supplier);
+            // Fix RMI serialization before calling DAO
+            if (supplier.getProducts() != null) {
+                supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+            }
+            
+            Supplier result = supplierDao.updateSupplier(supplier);
+            
+            // Ensure result is also RMI-safe
+            if (result != null && result.getProducts() != null) {
+                result.setProducts(new ArrayList<>(result.getProducts()));
+            }
+            
+            return result;
         } catch (Exception e) {
             LogUtil.error("Error updating supplier", e);
             throw new RemoteException("Failed to update supplier", e);
@@ -84,7 +108,14 @@ public class SupplierServiceImpl extends UnicastRemoteObject implements Supplier
                 return null;
             }
             
-            return supplierDao.deleteSupplier(supplier);
+            Supplier result = supplierDao.deleteSupplier(supplier);
+            
+            // Ensure result is RMI-safe
+            if (result != null && result.getProducts() != null) {
+                result.setProducts(new ArrayList<>(result.getProducts()));
+            }
+            
+            return result;
         } catch (Exception e) {
             LogUtil.error("Error deleting supplier", e);
             throw new RemoteException("Failed to delete supplier", e);
@@ -99,7 +130,14 @@ public class SupplierServiceImpl extends UnicastRemoteObject implements Supplier
                 return null;
             }
             
-            return supplierDao.findSupplierById(id);
+            Supplier supplier = supplierDao.findSupplierById(id);
+            
+            // Ensure result is RMI-safe
+            if (supplier != null && supplier.getProducts() != null) {
+                supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+            }
+            
+            return supplier;
         } catch (Exception e) {
             LogUtil.error("Error finding supplier by ID: " + id, e);
             throw new RemoteException("Failed to find supplier by ID", e);
@@ -114,7 +152,14 @@ public class SupplierServiceImpl extends UnicastRemoteObject implements Supplier
                 return null;
             }
             
-            return supplierDao.findSupplierByCode(supplierCode.trim());
+            Supplier supplier = supplierDao.findSupplierByCode(supplierCode.trim());
+            
+            // Ensure result is RMI-safe
+            if (supplier != null && supplier.getProducts() != null) {
+                supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+            }
+            
+            return supplier;
         } catch (Exception e) {
             LogUtil.error("Error finding supplier by code: " + supplierCode, e);
             throw new RemoteException("Failed to find supplier by code", e);
@@ -129,7 +174,18 @@ public class SupplierServiceImpl extends UnicastRemoteObject implements Supplier
                 return null;
             }
             
-            return supplierDao.findSuppliersByName(name.trim());
+            List<Supplier> suppliers = supplierDao.findSuppliersByName(name.trim());
+            
+            // Ensure all suppliers in list are RMI-safe
+            if (suppliers != null) {
+                for (Supplier supplier : suppliers) {
+                    if (supplier.getProducts() != null) {
+                        supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+                    }
+                }
+            }
+            
+            return suppliers;
         } catch (Exception e) {
             LogUtil.error("Error finding suppliers by name: " + name, e);
             throw new RemoteException("Failed to find suppliers by name", e);
@@ -144,7 +200,14 @@ public class SupplierServiceImpl extends UnicastRemoteObject implements Supplier
                 return null;
             }
             
-            return supplierDao.findSupplierByEmail(email.trim());
+            Supplier supplier = supplierDao.findSupplierByEmail(email.trim());
+            
+            // Ensure result is RMI-safe
+            if (supplier != null && supplier.getProducts() != null) {
+                supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+            }
+            
+            return supplier;
         } catch (Exception e) {
             LogUtil.error("Error finding supplier by email: " + email, e);
             throw new RemoteException("Failed to find supplier by email", e);
@@ -154,7 +217,18 @@ public class SupplierServiceImpl extends UnicastRemoteObject implements Supplier
     @Override
     public List<Supplier> findAllSuppliers() throws RemoteException {
         try {
-            return supplierDao.findAllSuppliers();
+            List<Supplier> suppliers = supplierDao.findAllSuppliers();
+            
+            // Ensure all suppliers in list are RMI-safe
+            if (suppliers != null) {
+                for (Supplier supplier : suppliers) {
+                    if (supplier.getProducts() != null) {
+                        supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+                    }
+                }
+            }
+            
+            return suppliers;
         } catch (Exception e) {
             LogUtil.error("Error finding all suppliers", e);
             throw new RemoteException("Failed to find all suppliers", e);
@@ -169,7 +243,14 @@ public class SupplierServiceImpl extends UnicastRemoteObject implements Supplier
                 return null;
             }
             
-            return supplierDao.getSupplierWithProducts(supplierId);
+            Supplier supplier = supplierDao.getSupplierWithProducts(supplierId);
+            
+            // Ensure result is RMI-safe (DAO should already handle this, but double-check)
+            if (supplier != null && supplier.getProducts() != null) {
+                supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+            }
+            
+            return supplier;
         } catch (Exception e) {
             LogUtil.error("Error getting supplier with products: " + supplierId, e);
             throw new RemoteException("Failed to get supplier with products", e);
@@ -212,7 +293,18 @@ public class SupplierServiceImpl extends UnicastRemoteObject implements Supplier
                 return null;
             }
             
-            return supplierDao.findSuppliersByContactPerson(contactPerson.trim());
+            List<Supplier> suppliers = supplierDao.findSuppliersByContactPerson(contactPerson.trim());
+            
+            // Ensure all suppliers in list are RMI-safe
+            if (suppliers != null) {
+                for (Supplier supplier : suppliers) {
+                    if (supplier.getProducts() != null) {
+                        supplier.setProducts(new ArrayList<>(supplier.getProducts()));
+                    }
+                }
+            }
+            
+            return suppliers;
         } catch (Exception e) {
             LogUtil.error("Error finding suppliers by contact person: " + contactPerson, e);
             throw new RemoteException("Failed to find suppliers by contact person", e);

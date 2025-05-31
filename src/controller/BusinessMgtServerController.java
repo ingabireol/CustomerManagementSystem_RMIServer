@@ -3,6 +3,7 @@ package controller;
 import service.implementation.*;
 import util.HibernateUtil;
 import util.LogUtil;
+import util.EmailService;
 
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
@@ -14,7 +15,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Enhanced Business Management Server Controller.
+ * Enhanced Business Management Server Controller with OTP Support.
  * Manages the RMI server, services, and provides administrative functions.
  */
 public class BusinessMgtServerController {
@@ -22,7 +23,7 @@ public class BusinessMgtServerController {
     // Server configuration
     private static final String SERVER_HOST = "127.0.0.1";
     private static final int SERVER_PORT = 4444;
-    private static final String SERVER_VERSION = "1.0.0";
+    private static final String SERVER_VERSION = "1.1.0";
     
     // Server components
     private Registry registry;
@@ -37,6 +38,7 @@ public class BusinessMgtServerController {
     private InvoiceServiceImpl invoiceService;
     private PaymentServiceImpl paymentService;
     private UserServiceImpl userService;
+    private OTPServiceImpl otpService; // NEW: OTP Service
     
     /**
      * Main method to start the server
@@ -59,6 +61,9 @@ public class BusinessMgtServerController {
                 case "-t":
                     server.testDatabaseConnection();
                     return;
+                case "--test-email":
+                    server.testEmailConfiguration();
+                    return;
             }
         }
         
@@ -75,6 +80,7 @@ public class BusinessMgtServerController {
             
             // Initialize components step by step
             initializeDatabase();
+            initializeEmailService();
             configureRMI();
             createRMIRegistry();
             initializeServices();
@@ -103,7 +109,7 @@ public class BusinessMgtServerController {
         System.out.println("╔══════════════════════════════════════════════════════════════╗");
         System.out.println("║              Business Management System Server               ║");
         System.out.println("║                        Version " + SERVER_VERSION + "                         ║");
-        System.out.println("║              Hibernate + RMI Implementation                  ║");
+        System.out.println("║              Hibernate + RMI + OTP Implementation            ║");
         System.out.println("╚══════════════════════════════════════════════════════════════╝");
         System.out.println();
     }
@@ -120,6 +126,27 @@ public class BusinessMgtServerController {
         } catch (Exception e) {
             LogUtil.error("✗ Database connection failed", e);
             throw new Exception("Cannot start server without database connection", e);
+        }
+    }
+    
+    /**
+     * Initializes and tests email service
+     */
+    private void initializeEmailService() {
+        LogUtil.info("Initializing email service...");
+        try {
+            EmailService emailService = EmailService.getInstance();
+            // Test email configuration (optional - comment out if you don't want to send test emails)
+            // boolean emailWorking = emailService.testEmailConfiguration();
+            // if (emailWorking) {
+            //     LogUtil.info("✓ Email service configured and working");
+            // } else {
+            //     LogUtil.warn("⚠ Email service configured but test failed - OTP emails may not work");
+            // }
+            LogUtil.info("✓ Email service initialized");
+        } catch (Exception e) {
+            LogUtil.warn("⚠ Email service initialization failed - OTP functionality may not work", e);
+            // Don't throw exception here as server can still run without email
         }
     }
     
@@ -160,7 +187,8 @@ public class BusinessMgtServerController {
             orderService = new OrderServiceImpl();
             invoiceService = new InvoiceServiceImpl();
             paymentService = new PaymentServiceImpl();
-            userService = new UserServiceImpl();
+            otpService = new OTPServiceImpl(); // NEW: Initialize OTP service
+            userService = new UserServiceImpl(); // Initialize after OTP service as it depends on it
             LogUtil.info("✓ All services initialized successfully");
         } catch (RemoteException e) {
             LogUtil.error("✗ Failed to initialize services", e);
@@ -192,6 +220,9 @@ public class BusinessMgtServerController {
             registry.rebind("paymentService", paymentService);
             LogUtil.info("  ✓ Payment Service registered");
             
+            registry.rebind("otpService", otpService); // NEW: Register OTP service
+            LogUtil.info("  ✓ OTP Service registered");
+            
             registry.rebind("userService", userService);
             LogUtil.info("  ✓ User Service registered");
             
@@ -211,13 +242,16 @@ public class BusinessMgtServerController {
      */
     private void startMonitoring() {
         LogUtil.info("Starting server monitoring...");
-        scheduler = Executors.newScheduledThreadPool(2);
+        scheduler = Executors.newScheduledThreadPool(3);
         
         // Health check every 5 minutes
         scheduler.scheduleAtFixedRate(this::performHealthCheck, 5, 5, TimeUnit.MINUTES);
         
         // Memory monitoring every 10 minutes
         scheduler.scheduleAtFixedRate(this::logMemoryUsage, 10, 10, TimeUnit.MINUTES);
+        
+        // OTP cleanup every hour
+        scheduler.scheduleAtFixedRate(this::cleanupExpiredOTPs, 60, 60, TimeUnit.MINUTES);
         
         LogUtil.info("✓ Server monitoring started");
     }
@@ -236,6 +270,22 @@ public class BusinessMgtServerController {
             LogUtil.debug("Health check passed - Server is healthy");
         } catch (Exception e) {
             LogUtil.error("Health check failed", e);
+        }
+    }
+    
+    /**
+     * Cleans up expired OTPs (scheduled task)
+     */
+    private void cleanupExpiredOTPs() {
+        try {
+            if (otpService != null) {
+                int cleanedUp = otpService.cleanupExpiredOTPs();
+                if (cleanedUp > 0) {
+                    LogUtil.info("Cleaned up " + cleanedUp + " expired OTPs");
+                }
+            }
+        } catch (Exception e) {
+            LogUtil.error("Failed to cleanup expired OTPs", e);
         }
     }
     
@@ -300,6 +350,12 @@ public class BusinessMgtServerController {
                     case "clients":
                         listConnectedClients();
                         break;
+                    case "cleanup-otp":
+                        cleanupExpiredOTPs();
+                        break;
+                    case "test-email":
+                        testEmailFromConsole();
+                        break;
                     case "gc":
                         System.gc();
                         LogUtil.info("Garbage collection requested");
@@ -330,15 +386,17 @@ public class BusinessMgtServerController {
      */
     private void printConsoleHelp() {
         System.out.println("\nAvailable Commands:");
-        System.out.println("  help      - Show this help message");
-        System.out.println("  status    - Show server status");
-        System.out.println("  stats     - Show server statistics");
-        System.out.println("  memory    - Show memory usage");
-        System.out.println("  health    - Perform health check");
-        System.out.println("  services  - List registered services");
-        System.out.println("  clients   - List connected clients");
-        System.out.println("  gc        - Force garbage collection");
-        System.out.println("  shutdown  - Shutdown the server");
+        System.out.println("  help         - Show this help message");
+        System.out.println("  status       - Show server status");
+        System.out.println("  stats        - Show server statistics");
+        System.out.println("  memory       - Show memory usage");
+        System.out.println("  health       - Perform health check");
+        System.out.println("  services     - List registered services");
+        System.out.println("  clients      - List connected clients");
+        System.out.println("  cleanup-otp  - Clean up expired OTPs");
+        System.out.println("  test-email   - Test email configuration");
+        System.out.println("  gc           - Force garbage collection");
+        System.out.println("  shutdown     - Shutdown the server");
         System.out.println();
     }
     
@@ -354,7 +412,8 @@ public class BusinessMgtServerController {
         System.out.println("║ Port: " + String.format("%-33s", SERVER_PORT) + " ║");
         System.out.println("║ Status: " + String.format("%-31s", isRunning ? "RUNNING" : "STOPPED") + " ║");
         System.out.println("║ Database: " + String.format("%-29s", "CONNECTED") + " ║");
-        System.out.println("║ Services: " + String.format("%-29s", "7 ACTIVE") + " ║");
+        System.out.println("║ Services: " + String.format("%-29s", "8 ACTIVE") + " ║");
+        System.out.println("║ OTP Support: " + String.format("%-26s", "ENABLED") + " ║");
         System.out.println("╚════════════════════════════════════════╝\n");
     }
     
@@ -427,6 +486,42 @@ public class BusinessMgtServerController {
     }
     
     /**
+     * Tests email configuration
+     */
+    public void testEmailConfiguration() {
+        try {
+            System.out.println("Testing email configuration...");
+            EmailService emailService = EmailService.getInstance();
+            boolean result = emailService.testEmailConfiguration();
+            if (result) {
+                System.out.println("✓ Email configuration test successful!");
+            } else {
+                System.out.println("✗ Email configuration test failed!");
+            }
+        } catch (Exception e) {
+            System.err.println("✗ Email configuration test failed: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Tests email from console
+     */
+    private void testEmailFromConsole() {
+        try {
+            System.out.println("Testing email configuration...");
+            EmailService emailService = EmailService.getInstance();
+            boolean result = emailService.testEmailConfiguration();
+            if (result) {
+                System.out.println("✓ Email test successful!");
+            } else {
+                System.out.println("✗ Email test failed!");
+            }
+        } catch (Exception e) {
+            System.out.println("✗ Email test error: " + e.getMessage());
+        }
+    }
+    
+    /**
      * Creates default admin user if no users exist
      */
     private void createDefaultAdminIfNeeded() {
@@ -471,6 +566,9 @@ public class BusinessMgtServerController {
             if (paymentService != null) {
                 UnicastRemoteObject.unexportObject(paymentService, true);
             }
+            if (otpService != null) {
+                UnicastRemoteObject.unexportObject(otpService, true);
+            }
             if (userService != null) {
                 UnicastRemoteObject.unexportObject(userService, true);
             }
@@ -494,9 +592,10 @@ public class BusinessMgtServerController {
         System.out.println("Business Management Server v" + SERVER_VERSION);
         System.out.println("\nUsage: java BusinessMgtServerController [options]");
         System.out.println("\nOptions:");
-        System.out.println("  --help, -h     Show this help message");
-        System.out.println("  --version, -v  Show version information");
-        System.out.println("  --test, -t     Test database connection only");
+        System.out.println("  --help, -h       Show this help message");
+        System.out.println("  --version, -v    Show version information");
+        System.out.println("  --test, -t       Test database connection only");
+        System.out.println("  --test-email     Test email configuration only");
         System.out.println("\nWith no options, starts the server normally.");
     }
     
@@ -506,6 +605,7 @@ public class BusinessMgtServerController {
     private static void printVersion() {
         System.out.println("Business Management Server");
         System.out.println("Version: " + SERVER_VERSION);
+        System.out.println("Features: RMI, Hibernate, OTP Authentication");
         System.out.println("Java Version: " + System.getProperty("java.version"));
         System.out.println("OS: " + System.getProperty("os.name") + " " + System.getProperty("os.version"));
     }
