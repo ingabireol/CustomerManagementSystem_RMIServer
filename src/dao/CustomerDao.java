@@ -23,6 +23,7 @@ public class CustomerDao {
             session.save(customer);
             transaction.commit();
             LogUtil.info("Customer created successfully: " + customer.getCustomerId());
+            customer.setOrders(new ArrayList<>(customer.getOrders()));
             return customer;
         } catch (Exception e) {
             if (transaction != null) {

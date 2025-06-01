@@ -54,7 +54,6 @@ public class CustomerServiceImpl extends UnicastRemoteObject implements Customer
                 LogUtil.warn("Attempted to create customer with existing customer ID: " + customer.getCustomerId());
                 return null;
             }
-            customer.setOrders(new ArrayList<>(customer.getOrders()));
             return customerDao.createCustomer(customer);
         } catch (Exception e) {
             LogUtil.error("Error creating customer", e);

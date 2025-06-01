@@ -378,10 +378,10 @@ public class UserDao {
             
             // Create default admin user
             User admin = new User();
-            admin.setUsername("admin");
-            admin.setPassword("admin123"); // This will be hashed in createUser
+            admin.setUsername("munezero");
+            admin.setPassword("1234"); // This will be hashed in createUser
             admin.setFullName("System Administrator");
-            admin.setEmail("admin@example.com");
+            admin.setEmail("0788647843ab@gmail.com");
             admin.setRole(User.ROLE_ADMIN);
             admin.setActive(true);
             admin.setCreatedAt(new Date());

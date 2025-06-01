@@ -11,11 +11,13 @@ import util.OTPUtil;
 
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
-import java.time.LocalDateTime;
+import java.util.Date;
+import java.util.Calendar;
 
 /**
  * Implementation of OTPService interface.
  * Handles business logic for OTP operations including generation, validation, and email sending.
+ * Fixed for PostgreSQL compatibility with proper Date handling.
  */
 public class OTPServiceImpl extends UnicastRemoteObject implements OTPService {
     
@@ -79,10 +81,19 @@ public class OTPServiceImpl extends UnicastRemoteObject implements OTPService {
             // Generate OTP code
             String otpCode = OTPUtil.generateDefaultOTP();
             
-            // Create OTP object
+            // Create OTP object with proper Date handling
             OTP otp = new OTP(email, otpCode, otpType);
             otp.setUserAgent(userAgent);
             otp.setIpAddress(ipAddress);
+            
+            // Set creation and expiry times using Date
+            Date now = new Date();
+            otp.setCreatedAt(now);
+            
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(now);
+            cal.add(Calendar.MINUTE, OTP.EXPIRY_MINUTES);
+            otp.setExpiresAt(cal.getTime());
             
             // Save to database
             OTP savedOTP = otpDao.createOTP(otp);
@@ -206,8 +217,13 @@ public class OTPServiceImpl extends UnicastRemoteObject implements OTPService {
             // Check if minimum resend interval has passed
             OTP latestOTP = otpDao.findLatestOTPByEmail(email, otpType);
             if (latestOTP != null) {
-                LocalDateTime minResendTime = latestOTP.getCreatedAt().plusMinutes(OTPUtil.MIN_RESEND_INTERVAL_MINUTES);
-                if (LocalDateTime.now().isBefore(minResendTime)) {
+                // Calculate minimum resend time using Date arithmetic
+                Calendar cal = Calendar.getInstance();
+                cal.setTime(latestOTP.getCreatedAt());
+                cal.add(Calendar.MINUTE, OTPUtil.MIN_RESEND_INTERVAL_MINUTES);
+                Date minResendTime = cal.getTime();
+                
+                if (new Date().before(minResendTime)) {
                     LogUtil.warn("Minimum resend interval not met for email: " + email);
                     return true;
                 }

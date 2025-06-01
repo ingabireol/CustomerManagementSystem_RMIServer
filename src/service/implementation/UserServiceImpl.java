@@ -10,12 +10,14 @@ import util.OTPUtil;
 
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
-import java.time.LocalDateTime;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 
 /**
  * Enhanced implementation of UserService interface.
  * Handles business logic for user management and authentication operations including OTP login.
+ * Fixed for PostgreSQL compatibility with proper Date handling.
  */
 public class UserServiceImpl extends UnicastRemoteObject implements UserService {
     
@@ -525,15 +527,23 @@ public class UserServiceImpl extends UnicastRemoteObject implements UserService 
                 return 0;
             }
             
-            // Calculate time remaining until next OTP can be sent
-            LocalDateTime nextAllowedTime = latestOTP.getCreatedAt().plusMinutes(OTPUtil.MIN_RESEND_INTERVAL_MINUTES);
-            LocalDateTime now = LocalDateTime.now();
+            // Calculate time remaining until next OTP can be sent using Date arithmetic
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(latestOTP.getCreatedAt());
+            cal.add(Calendar.MINUTE, OTPUtil.MIN_RESEND_INTERVAL_MINUTES);
+            Date nextAllowedTime = cal.getTime();
             
-            if (now.isAfter(nextAllowedTime)) {
+            Date now = new Date();
+            
+            if (now.after(nextAllowedTime)) {
                 return 0;
             }
             
-            return (int) java.time.Duration.between(now, nextAllowedTime).toMinutes() + 1;
+            // Calculate difference in minutes
+            long diffInMillis = nextAllowedTime.getTime() - now.getTime();
+            long diffInMinutes = diffInMillis / (60 * 1000);
+            
+            return (int) diffInMinutes + 1;
             
         } catch (Exception e) {
             LogUtil.error("Error getting OTP cooldown for email: " + email, e);

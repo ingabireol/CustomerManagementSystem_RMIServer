@@ -1,5 +1,6 @@
 package dao;
 
+import java.util.ArrayList;
 import model.Product;
 import model.Supplier;
 import org.hibernate.Session;
@@ -9,6 +10,8 @@ import util.HibernateUtil;
 import util.LogUtil;
 
 import java.util.List;
+import org.hibernate.Hibernate;
+import org.hibernate.proxy.HibernateProxy;
 
 /**
  * FIXED: ProductDao with proper RMI serialization handling
@@ -235,11 +238,12 @@ public class ProductDao {
             List<Product> products = query.list();
             
             for (Product product : products) {
+                product.setSupplier(unproxy(product.getSupplier()));
                 session.evict(product);
             }
             
             LogUtil.debug("Found " + products.size() + " products in total");
-            return products;
+            return new ArrayList<>(products);
         } catch (Exception e) {
             LogUtil.error("Error finding all products", e);
             return null;
@@ -248,6 +252,13 @@ public class ProductDao {
                 session.close();
             }
         }
+    }
+    
+    public static <T> T unproxy(T entity) {
+    if (entity instanceof HibernateProxy) {
+        return (T) ((HibernateProxy) entity).getHibernateLazyInitializer().getImplementation();
+    }
+    return entity;
     }
     
     public Product getProductWithSupplier(int productId) {
@@ -263,6 +274,7 @@ public class ProductDao {
                 session.evict(product);
                 if (product.getSupplier() != null) {
                     session.evict(product.getSupplier());
+                    product.setSupplier(unproxy(product.getSupplier()));
                 }
                 LogUtil.debug("Found product with supplier: " + productId);
             } else {

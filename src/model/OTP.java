@@ -3,10 +3,13 @@ package model;
 import javax.persistence.*;
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Date;
 
 /**
  * Represents an OTP (One Time Password) in the business management system.
  * Used for email-based authentication and login verification.
+ * Fixed for PostgreSQL compatibility.
  */
 @Entity
 @Table(name = "otps")
@@ -24,10 +27,12 @@ public class OTP implements Serializable {
     private String otpCode;
     
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date createdAt;
     
     @Column(name = "expires_at", nullable = false)
-    private LocalDateTime expiresAt;
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date expiresAt;
     
     @Column(nullable = false)
     private boolean used;
@@ -58,8 +63,8 @@ public class OTP implements Serializable {
      * Default constructor
      */
     public OTP() {
-        this.createdAt = LocalDateTime.now();
-        this.expiresAt = LocalDateTime.now().plusMinutes(EXPIRY_MINUTES);
+        this.createdAt = new Date();
+        this.expiresAt = new Date(System.currentTimeMillis() + (EXPIRY_MINUTES * 60 * 1000));
         this.used = false;
         this.verificationAttempts = 0;
         this.otpType = TYPE_LOGIN;
@@ -93,8 +98,8 @@ public class OTP implements Serializable {
      * @param userAgent User agent string
      * @param ipAddress IP address
      */
-    public OTP(int id, String email, String otpCode, LocalDateTime createdAt, 
-               LocalDateTime expiresAt, boolean used, int verificationAttempts, 
+    public OTP(int id, String email, String otpCode, Date createdAt, 
+               Date expiresAt, boolean used, int verificationAttempts, 
                String otpType, String userAgent, String ipAddress) {
         this.id = id;
         this.email = email;
@@ -134,19 +139,19 @@ public class OTP implements Serializable {
         this.otpCode = otpCode;
     }
 
-    public LocalDateTime getCreatedAt() {
+    public Date getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
+    public void setCreatedAt(Date createdAt) {
         this.createdAt = createdAt;
     }
 
-    public LocalDateTime getExpiresAt() {
+    public Date getExpiresAt() {
         return expiresAt;
     }
 
-    public void setExpiresAt(LocalDateTime expiresAt) {
+    public void setExpiresAt(Date expiresAt) {
         this.expiresAt = expiresAt;
     }
 
@@ -190,13 +195,51 @@ public class OTP implements Serializable {
         this.ipAddress = ipAddress;
     }
     
+    // Convenience methods for LocalDateTime compatibility
+    
+    /**
+     * Gets created date as LocalDateTime
+     * 
+     * @return LocalDateTime representation of creation time
+     */
+    public LocalDateTime getCreatedAtAsLocalDateTime() {
+        return createdAt.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+    }
+    
+    /**
+     * Sets created date from LocalDateTime
+     * 
+     * @param createdAt LocalDateTime to convert and set
+     */
+    public void setCreatedAtFromLocalDateTime(LocalDateTime createdAt) {
+        this.createdAt = Date.from(createdAt.atZone(ZoneId.systemDefault()).toInstant());
+    }
+    
+    /**
+     * Gets expiry date as LocalDateTime
+     * 
+     * @return LocalDateTime representation of expiry time
+     */
+    public LocalDateTime getExpiresAtAsLocalDateTime() {
+        return expiresAt.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+    }
+    
+    /**
+     * Sets expiry date from LocalDateTime
+     * 
+     * @param expiresAt LocalDateTime to convert and set
+     */
+    public void setExpiresAtFromLocalDateTime(LocalDateTime expiresAt) {
+        this.expiresAt = Date.from(expiresAt.atZone(ZoneId.systemDefault()).toInstant());
+    }
+    
     /**
      * Checks if the OTP is expired
      * 
      * @return true if the OTP is expired
      */
     public boolean isExpired() {
-        return LocalDateTime.now().isAfter(expiresAt);
+        return new Date().after(expiresAt);
     }
     
     /**
@@ -228,11 +271,12 @@ public class OTP implements Serializable {
      * @return Minutes until expiration, or 0 if already expired
      */
     public long getRemainingMinutes() {
-        LocalDateTime now = LocalDateTime.now();
-        if (now.isAfter(expiresAt)) {
+        Date now = new Date();
+        if (now.after(expiresAt)) {
             return 0;
         }
-        return java.time.Duration.between(now, expiresAt).toMinutes();
+        long diffInMillis = expiresAt.getTime() - now.getTime();
+        return diffInMillis / (60 * 1000);
     }
     
     @Override

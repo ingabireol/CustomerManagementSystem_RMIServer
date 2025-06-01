@@ -7,11 +7,13 @@ import org.hibernate.Query;
 import util.HibernateUtil;
 import util.LogUtil;
 
-import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.List;
+import java.util.Calendar;
 
 /**
  * Data Access Object for OTP operations using Hibernate.
+ * Fixed for PostgreSQL compatibility with proper Date handling.
  */
 public class OTPDao {
     
@@ -27,6 +29,18 @@ public class OTPDao {
         try {
             session = HibernateUtil.getSessionFactory().openSession();
             transaction = session.beginTransaction();
+            
+            // Ensure dates are properly set
+            if (otp.getCreatedAt() == null) {
+                otp.setCreatedAt(new Date());
+            }
+            if (otp.getExpiresAt() == null) {
+                Calendar cal = Calendar.getInstance();
+                cal.setTime(otp.getCreatedAt());
+                cal.add(Calendar.MINUTE, OTP.EXPIRY_MINUTES);
+                otp.setExpiresAt(cal.getTime());
+            }
+            
             session.save(otp);
             transaction.commit();
             LogUtil.info("OTP created successfully for email: " + otp.getEmail());
@@ -120,7 +134,7 @@ public class OTPDao {
             query.setParameter("email", email);
             query.setParameter("otpCode", otpCode);
             query.setParameter("otpType", otpType);
-            query.setParameter("now", LocalDateTime.now());
+            query.setParameter("now", new Date());
             query.setParameter("maxAttempts", OTP.MAX_VERIFICATION_ATTEMPTS);
             query.setMaxResults(1);
             
@@ -189,12 +203,18 @@ public class OTPDao {
         Session session = null;
         try {
             session = HibernateUtil.getSessionFactory().openSession();
+            
+            // Calculate one hour ago
+            Calendar cal = Calendar.getInstance();
+            cal.add(Calendar.HOUR_OF_DAY, -1);
+            Date oneHourAgo = cal.getTime();
+            
             Query query = session.createQuery(
                 "FROM OTP o WHERE o.email = :email AND o.otpType = :otpType " +
                 "AND o.createdAt > :oneHourAgo ORDER BY o.createdAt DESC");
             query.setParameter("email", email);
             query.setParameter("otpType", otpType);
-            query.setParameter("oneHourAgo", LocalDateTime.now().minusHours(1));
+            query.setParameter("oneHourAgo", oneHourAgo);
             
             List<OTP> otps = query.list();
             
@@ -303,9 +323,14 @@ public class OTPDao {
             session = HibernateUtil.getSessionFactory().openSession();
             transaction = session.beginTransaction();
             
+            // Delete OTPs that expired more than 24 hours ago or are used
+            Calendar cal = Calendar.getInstance();
+            cal.add(Calendar.DAY_OF_MONTH, -1);
+            Date oneDayAgo = cal.getTime();
+            
             Query query = session.createQuery(
-                "DELETE FROM OTP o WHERE o.expiresAt < :now OR o.used = true");
-            query.setParameter("now", LocalDateTime.now().minusDays(1)); // Keep for 24 hours even if used
+                "DELETE FROM OTP o WHERE o.expiresAt < :oneDayAgo OR o.used = true");
+            query.setParameter("oneDayAgo", oneDayAgo);
             
             int deletedCount = query.executeUpdate();
             transaction.commit();
@@ -339,12 +364,18 @@ public class OTPDao {
         Session session = null;
         try {
             session = HibernateUtil.getSessionFactory().openSession();
+            
+            // Calculate one hour ago
+            Calendar cal = Calendar.getInstance();
+            cal.add(Calendar.HOUR_OF_DAY, -1);
+            Date oneHourAgo = cal.getTime();
+            
             Query query = session.createQuery(
                 "SELECT COUNT(o) FROM OTP o WHERE o.email = :email AND o.otpType = :otpType " +
                 "AND o.createdAt > :oneHourAgo");
             query.setParameter("email", email);
             query.setParameter("otpType", otpType);
-            query.setParameter("oneHourAgo", LocalDateTime.now().minusHours(1));
+            query.setParameter("oneHourAgo", oneHourAgo);
             
             Long count = (Long) query.uniqueResult();
             return count != null ? count : 0;
